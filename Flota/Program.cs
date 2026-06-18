@@ -1,0 +1,43 @@
+using System;
+using Microsoft.EntityFrameworkCore;
+using Flota.Components;
+using Flota.Domain.Interfaces;
+using Flota.Infrastructure.Data;
+using Flota.Infrastructure.Services;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+
+var conn = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new Exception("Brak ConnectionString");
+builder.Services.AddDbContext<FleetDbContext>(o => o.UseSqlServer(conn));
+
+builder.Services.AddScoped<IPojazdSerwis, PojazdSerwis>();
+builder.Services.AddScoped<ITankowanieSerwis, TankowanieSerwis>();
+builder.Services.AddScoped<IKierowcaSerwis, KierowcaSerwis>();
+builder.Services.AddScoped<ISerwisPojazdu, SerwisPojazdu>();
+builder.Services.AddScoped<IPrzydzialSerwis, PrzydzialSerwis>();
+builder.Services.AddScoped<IUbezpieczenieSerwis, UbezpieczenieSerwis>();
+builder.Services.AddScoped<IHarmonogramSerwis, HarmonogramSerwis>();
+
+var app = builder.Build();
+
+using (var scope = app.Services.CreateScope()) {
+    var db = scope.ServiceProvider.GetRequiredService<FleetDbContext>();
+    DbInitializer.Initialize(db);
+}
+
+if (!app.Environment.IsDevelopment()) {
+    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+app.UseAntiforgery();
+app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+app.Run();

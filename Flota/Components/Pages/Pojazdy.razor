@@ -1,0 +1,205 @@
+@page "/pojazdy"
+@using Flota.Domain.Entities
+@using Flota.Domain.Enums
+@using Flota.Domain.Interfaces
+@inject IPojazdSerwis PojazdSerwis
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
+
+@rendermode RenderMode.InteractiveServer
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold">Baza Pojazdów</h2>
+            <p class="text-muted">Zarządzaj flotą, dodawaj nowe auta i sprawdzaj ich status.</p>
+        </div>
+        <div class="bg-light p-2 rounded border">
+            <span class="fw-bold text-primary">@pojazdy.Count</span> pojazdów w systemie
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-5 border-0 bg-light">
+        <div class="card-body">
+            <h5 class="card-title text-primary mb-3">Rejestracja nowego pojazdu</h5>
+            
+            <EditForm Model="@nowyPojazd" OnValidSubmit="DodajPojazd">
+                <DataAnnotationsValidator />
+                
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Marka</label>
+                        <InputText class="form-control" placeholder="Toyota" @bind-Value="nowyPojazd.Marka" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Model</label>
+                        <InputText class="form-control" placeholder="Corolla" @bind-Value="nowyPojazd.Model" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Nr Rejestracyjny</label>
+                        <InputText class="form-control text-uppercase" placeholder="CB 12345" @bind-Value="nowyPojazd.NumerRejestracyjny" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Rok Produkcji</label>
+                        <InputNumber class="form-control" @bind-Value="nowyPojazd.RokProdukcji" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Przebieg (km)</label>
+                        <InputNumber class="form-control" @bind-Value="nowyPojazd.Przebieg" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Pojemność Baku (L)</label>
+                        <InputNumber class="form-control" @bind-Value="nowyPojazd.PojemnoscZbiornika" />
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end">
+                        <button class="btn btn-primary w-100 fw-bold shadow-sm" type="submit">
+                            Zapisz w bazie
+                        </button>
+                    </div>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 class="mb-0">Lista Pojazdów</h5>
+            <div style="width: 300px;">
+                <input type="text" class="form-control form-control-sm" placeholder="Szukaj (marka, model, rejestracja)..." @bind-value="filtrTekstowy" @bind-value:event="oninput" />
+            </div>
+        </div>
+        <div class="card-body p-0">
+            @if (pojazdy == null)
+            {
+                <div class="p-4 text-center">Ładowanie...</div>
+            }
+            else if (!pojazdy.Any())
+            {
+                <div class="p-5 text-center text-muted">
+                    <h4>Brak pojazdów</h4>
+                    <p>Skorzystaj z formularza powyżej, aby dodać pierwsze auto.</p>
+                </div>
+            }
+            else
+            {
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light text-muted small text-uppercase">
+                        <tr>
+                            <th class="ps-4">Pojazd / Rejestracja</th>
+                            <th>Specyfikacja</th>
+                            <th>Status</th>
+                            <th class="text-end pe-4">Akcje</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in pojazdyFiltrowane)
+                        {
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="d-flex align-items-center">
+                                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
+                                            🚗
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold text-dark">@p.Marka @p.Model</div>
+                                            <div class="small text-muted font-monospace">@p.NumerRejestracyjny</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="small">
+                                        <span class="d-block">Rok: <strong>@p.RokProdukcji</strong></span>
+                                        <span class="d-block">@p.Przebieg.ToString("N0") km</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    @switch (p.Status)
+                                    {
+                                        case StatusPojazdu.Dostepny:
+                                            <span class="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">
+                                                ● Dostępny
+                                            </span>
+                                            break;
+                                        case StatusPojazdu.WUzytkowaniu:
+                                            <span class="badge bg-warning bg-opacity-10 text-warning px-3 py-2 rounded-pill">
+                                                ➜ W Trasie
+                                            </span>
+                                            break;
+                                        case StatusPojazdu.WSerwisie:
+                                            <span class="badge bg-danger bg-opacity-10 text-danger px-3 py-2 rounded-pill">
+                                                🛠 Serwis
+                                            </span>
+                                            break;
+                                        case StatusPojazdu.Wylaczony:
+                                            <span class="badge bg-secondary px-3 py-2 rounded-pill">Wyłączony</span>
+                                            break;
+                                    }
+                                </td>
+                                <td class="text-end pe-4">
+                                    <button class="btn btn-sm btn-outline-primary me-2" @onclick="() => Szczegoly(p.Id)" title="Szczegóły">
+                                        Karta
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => UsunPojazd(p.Id)" title="Usuń">
+                                        Usuń
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Pojazd> pojazdy = new();
+    private Pojazd nowyPojazd = new();
+    private string filtrTekstowy = "";
+
+    private IEnumerable<Pojazd> pojazdyFiltrowane =>
+        string.IsNullOrWhiteSpace(filtrTekstowy)
+            ? pojazdy
+            : pojazdy.Where(p => p.Marka.Contains(filtrTekstowy, StringComparison.OrdinalIgnoreCase)
+                                 || p.Model.Contains(filtrTekstowy, StringComparison.OrdinalIgnoreCase)
+                                 || p.NumerRejestracyjny.Contains(filtrTekstowy, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ZaladujPojazdy();
+        
+        nowyPojazd.RokProdukcji = DateTime.Now.Year;
+    }
+
+    private async Task ZaladujPojazdy()
+    {
+        //Pobieramy i sortujemy tak by wyłączone były na końcu
+        var wszystkie = await PojazdSerwis.PobierzWszystkieAsync();
+        pojazdy = wszystkie.OrderBy(p => p.Status == StatusPojazdu.Wylaczony).ThenBy(p => p.Marka).ToList();
+    }
+
+    private async Task DodajPojazd()
+    {
+        nowyPojazd.Status = StatusPojazdu.Dostepny;
+        await PojazdSerwis.DodajAsync(nowyPojazd);
+        
+        nowyPojazd = new Pojazd { RokProdukcji = DateTime.Now.Year }; // Reset formularza
+        await ZaladujPojazdy();
+    }
+
+    private async Task UsunPojazd(int id)
+    {
+        bool potwierdzenie = await JS.InvokeAsync<bool>("confirm", "Czy na pewno chcesz usunąć ten pojazd? (Zostanie oznaczony jako wyłączony)");
+        if (potwierdzenie)
+        {
+            await PojazdSerwis.UsunAsync(id);
+            await ZaladujPojazdy();
+        }
+    }
+
+    private void Szczegoly(int id)
+    {
+        NavManager.NavigateTo($"/pojazdy/{id}");
+    }
+}

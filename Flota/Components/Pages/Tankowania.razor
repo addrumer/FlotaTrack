@@ -1,0 +1,192 @@
+@page "/tankowania"
+@using Flota.Domain.Entities
+@using Flota.Domain.Interfaces
+@inject ITankowanieSerwis TankowanieSerwis
+@inject IPojazdSerwis PojazdSerwis
+@inject IJSRuntime JS
+
+@rendermode RenderMode.InteractiveServer
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Rejestr Tankowań</h2>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card shadow-sm border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Dodaj Tankowanie</h5>
+                </div>
+                <div class="card-body">
+                    <EditForm Model="@noweTankowanie" OnValidSubmit="DodajTankowanie">
+                        <DataAnnotationsValidator />
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Pojazd</label>
+                            <InputSelect @bind-Value="noweTankowanie.PojazdId" class="form-select">
+                                <option value="0">-- Wybierz --</option>
+                                @foreach (var p in pojazdy)
+                                {
+                                    <option value="@p.Id">@p.Marka @p.Model (@p.NumerRejestracyjny)</option>
+                                }
+                            </InputSelect>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Data</label>
+                            <InputDate @bind-Value="noweTankowanie.Data" class="form-control" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Stan Licznika (km)</label>
+                            <InputNumber @bind-Value="noweTankowanie.Przebieg" class="form-control" placeholder="np. 154200" />
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label">Litry</label>
+                                <InputNumber @bind-Value="noweTankowanie.IloscLitrow" class="form-control" @oninput="PrzeliczKoszt" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Cena/L (PLN)</label>
+                                <InputNumber @bind-Value="noweTankowanie.CenaZaLitr" class="form-control" @oninput="PrzeliczKoszt" />
+                            </div>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            <InputCheckbox @bind-Value="noweTankowanie.CzyDoPelna" class="form-check-input" id="doPelna" />
+                            <label class="form-check-label" for="doPelna">
+                                Tankowanie do pełna (Full)
+                            </label>
+                        </div>
+
+                        <div class="alert alert-light border text-center">
+                            <small class="text-muted">Szacowany koszt:</small>
+                            <h4 class="text-success fw-bold m-0">
+                                @((noweTankowanie.IloscLitrow * noweTankowanie.CenaZaLitr).ToString("C"))
+                            </h4>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-success">Zapisz Tankowanie</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h5 class="mb-0">Historia Tankowań</h5>
+                    <div style="width: 300px;">
+                        <input type="text" class="form-control form-control-sm" placeholder="Szukaj pojazdu (marka, model, rej.)..." @bind-value="filtrTekstowy" @bind-value:event="oninput" />
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-hover table-striped mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Pojazd</th>
+                                <th>Data</th>
+                                <th>Stan Licznika</th>
+                                <th>Paliwo</th>
+                                <th>Cena/L</th>
+                                <th>Koszt</th>
+                                <th>Pełny?</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (tankowania == null)
+                            {
+                                <tr><td colspan="7" class="text-center p-3">Ładowanie...</td></tr>
+                            }
+                            else if (!tankowania.Any())
+                            {
+                                <tr><td colspan="7" class="text-center p-3">Brak wpisów.</td></tr>
+                            }
+                            else
+                            {
+                                @foreach (var t in tankowaniaFiltrowane)
+                                {
+                                    <tr>
+                                        <td>
+                                            @if(t.Pojazd != null)
+                                            {
+                                                <strong>@t.Pojazd.Marka @t.Pojazd.Model</strong><br/>
+                                                <small class="text-muted">@t.Pojazd.NumerRejestracyjny</small>
+                                            }
+                                            else { <span>Usunięty</span> }
+                                        </td>
+                                        <td>@t.Data.ToShortDateString()</td>
+                                        <td>@t.Przebieg.ToString("N0") km</td>
+                                        <td>@t.IloscLitrow.ToString("N1") L</td>
+                                        <td>@t.CenaZaLitr.ToString("C")</td>
+                                        <td class="fw-bold text-success">
+                                            @t.LacznyKoszt.ToString("C")
+                                        </td>
+                                        <td>
+                                            @if (t.CzyDoPelna)
+                                            {
+                                                <span class="badge bg-success">TAK</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">NIE</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Tankowanie> tankowania = new();
+    private List<Pojazd> pojazdy = new();
+    private Tankowanie noweTankowanie = new();
+    private string filtrTekstowy = "";
+
+    private IEnumerable<Tankowanie> tankowaniaFiltrowane =>
+        string.IsNullOrWhiteSpace(filtrTekstowy)
+            ? tankowania
+            : tankowania.Where(t => t.Pojazd != null && (
+                                    t.Pojazd.Marka.Contains(filtrTekstowy, StringComparison.OrdinalIgnoreCase)
+                                    || t.Pojazd.Model.Contains(filtrTekstowy, StringComparison.OrdinalIgnoreCase)
+                                    || t.Pojazd.NumerRejestracyjny.Contains(filtrTekstowy, StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ZaladujDane();
+    }
+
+    private async Task ZaladujDane()
+    {
+        tankowania = await TankowanieSerwis.PobierzWszystkieAsync();
+        //Pobieramy tylko aktywne pojazdy
+        var wszystkiePojazdy = await PojazdSerwis.PobierzWszystkieAsync();
+        pojazdy = wszystkiePojazdy.Where(p => p.Status != Flota.Domain.Enums.StatusPojazdu.Wylaczony).ToList();
+        
+        noweTankowanie = new Tankowanie { Data = DateTime.Now };
+    }
+    
+    //Metoda wywoływana przy wpisywaniu liczb - do odświeżania UI (kosztu)
+    private void PrzeliczKoszt(ChangeEventArgs e)
+    {
+        StateHasChanged();
+    }
+
+    private async Task DodajTankowanie()
+    {
+        if (noweTankowanie.PojazdId == 0) return;
+
+        await TankowanieSerwis.DodajAsync(noweTankowanie);
+        await ZaladujDane();
+    }
+}

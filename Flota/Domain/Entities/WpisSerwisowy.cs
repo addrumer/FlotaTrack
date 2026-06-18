@@ -1,0 +1,26 @@
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using Flota.Domain.Enums;
+
+namespace Flota.Domain.Entities;
+
+public class WpisSerwisowy
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    public int PojazdId { get; set; }
+    public virtual Pojazd Pojazd { get; set; } = null!;
+
+    [Required(ErrorMessage = "Opis jest wymagany")]
+    public string Opis { get; set; } = "";
+
+    [Column(TypeName = "decimal(10,2)")]
+    public decimal Koszt { get; set; }
+
+    public string NazwaWarsztatu { get; set; } = "";
+    public DateTime DataZgloszenia { get; set; } = DateTime.Now;
+    public string Status { get; set; } = "W Trakcie"; 
+    public TypNaprawy TypNaprawy { get; set; }
+}
